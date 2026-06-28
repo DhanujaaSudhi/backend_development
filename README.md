@@ -201,6 +201,99 @@ Create a new user. Password is not returned in the response for security.
 }
 ```
 
+#### POST /items/with-tags/
+Create an item with tags using return type annotation.
+
+**Request Body:**
+```json
+{
+  "name": "string",
+  "description": "string (optional)",
+  "price": 0.0,
+  "tax": 0.0 (optional),
+  "tags": ["string"]
+}
+```
+
+**Response:**
+```json
+{
+  "name": "string",
+  "description": "string",
+  "price": 0.0,
+  "tax": 0.0,
+  "tags": ["string"]
+}
+```
+
+#### GET /items/list/
+Return a list of items using return type annotation.
+
+**Response:**
+```json
+[
+  {
+    "name": "Portal Gun",
+    "description": null,
+    "price": 42.0,
+    "tax": null,
+    "tags": ["sci-fi", "weapon"]
+  },
+  {
+    "name": "Plumbus",
+    "description": null,
+    "price": 32.0,
+    "tax": null,
+    "tags": ["household", "tool"]
+  }
+]
+```
+
+#### GET /items/{item_id}/minimal
+Return item excluding unset default values using `response_model_exclude_unset=True`.
+
+**Response for "foo":**
+```json
+{
+  "name": "Foo",
+  "price": 50.2
+}
+```
+
+**Response for "bar":**
+```json
+{
+  "name": "Bar",
+  "description": "The bartenders",
+  "price": 62,
+  "tax": 20.2
+}
+```
+
+#### GET /items/{item_id}/name-only
+Return item with only name and description fields using `response_model_include`.
+
+**Response:**
+```json
+{
+  "name": "string",
+  "description": "string"
+}
+```
+
+#### GET /items/{item_id}/public
+Return item excluding tax field using `response_model_exclude`.
+
+**Response:**
+```json
+{
+  "name": "string",
+  "description": "string",
+  "price": 0.0,
+  "tags": []
+}
+```
+
 ### Key Concepts Implemented
 
 1. **Pydantic BaseModel**: Data validation using Python type annotations
@@ -211,6 +304,10 @@ Create a new user. Password is not returned in the response for security.
 6. **Email Validation**: Using `EmailStr` for email field validation
 7. **Automatic Documentation**: Request/response schemas automatically appear in Swagger UI
 8. **Data Transformation**: Computing derived fields (price_with_tax) in responses
+9. **Return Type Annotations**: Using function return types for validation and documentation
+10. **response_model_exclude_unset**: Returning only explicitly set values, excluding defaults
+11. **response_model_include**: Including only specific fields in the response
+12. **response_model_exclude**: Excluding specific fields from the response
 
 ### Technical Details
 
