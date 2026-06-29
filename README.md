@@ -538,3 +538,227 @@ The Hero table structure:
 - **Performance**: Database indexes on frequently queried fields
 - **Flexibility**: Easy to switch between SQLite, PostgreSQL, MySQL, etc.
 - **Developer Experience**: Excellent editor support with autocomplete
+
+---
+
+## Stage 4: Query Parameters and Path Parameters
+
+### Overview
+This stage demonstrates FastAPI's powerful parameter handling capabilities, including query parameters with defaults, optional parameters, type validation, boolean conversion, required parameters, multiple parameters, path parameters with types, enum-based predefined values, and path convertors for handling paths within paths.
+
+### Implementation Details
+
+#### Query Parameters
+- **Default Values**: Parameters with default values (skip=0, limit=10)
+- **Optional Parameters**: Parameters that can be None (q: str | None = None)
+- **Boolean Conversion**: Automatic conversion of string values to bool (short: bool = False)
+- **Required Parameters**: Parameters without defaults are required (needy: str)
+- **Multiple Parameters**: Combining path and query parameters in a single endpoint
+
+#### Path Parameters
+- **Type Validation**: Path parameters with type annotations (item_id: int)
+- **Enum Predefined Values**: Restricting path parameters to specific values using Enum
+- **Path Convertor**: Handling paths that contain slashes using :path
+
+### API Endpoints
+
+#### GET /items/
+Query parameters with default values for pagination.
+
+**Query Parameters:**
+- `skip` (default: 0): Number of items to skip
+- `limit` (default: 10): Maximum number of items to return
+
+**URL Example:** `/items/?skip=0&limit=10`
+
+**Response:**
+```json
+[
+  {"item_name": "Foo"},
+  {"item_name": "Bar"}
+]
+```
+
+#### GET /items/{item_id}
+Optional query parameter.
+
+**Parameters:**
+- `item_id` (path): String ID of the item
+- `q` (query, optional): Search query string
+
+**URL Example:** `/items/foo?q=search`
+
+**Response:**
+```json
+{
+  "item_id": "foo",
+  "q": "search"
+}
+```
+
+#### GET /items/{item_id}/detail
+Boolean query parameter with automatic conversion.
+
+**Parameters:**
+- `item_id` (path): String ID of the item
+- `q` (query, optional): Search query string
+- `short` (query, default: false): Boolean flag for short response
+
+**URL Example:** `/items/foo/detail?short=true`
+
+**Response (short=false):**
+```json
+{
+  "item_id": "foo",
+  "description": "This is an amazing item that has a long description"
+}
+```
+
+#### GET /items/{item_id}/required
+Required query parameter.
+
+**Parameters:**
+- `item_id` (path): String ID of the item
+- `needy` (query, required): Required string parameter
+
+**URL Example:** `/items/foo/required?needy=value`
+
+**Response:**
+```json
+{
+  "item_id": "foo",
+  "needy": "value"
+}
+```
+
+#### GET /users/{user_id}/items/{item_id}
+Multiple path and query parameters.
+
+**Parameters:**
+- `user_id` (path): Integer user ID
+- `item_id` (path): String item ID
+- `q` (query, optional): Search query string
+- `short` (query, default: false): Boolean flag for short response
+
+**URL Example:** `/users/1/items/foo?q=search&short=true`
+
+**Response:**
+```json
+{
+  "item_id": "foo",
+  "owner_id": 1,
+  "q": "search"
+}
+```
+
+#### GET /items/{item_id}/typed
+Path parameter with type validation.
+
+**Parameters:**
+- `item_id` (path): Integer ID of the item
+
+**URL Example:** `/items/3/typed`
+
+**Response:**
+```json
+{
+  "item_id": 3
+}
+```
+
+#### GET /models/{model_name}
+Path parameter with predefined enum values.
+
+**Parameters:**
+- `model_name` (path): One of "alexnet", "resnet", "lenet"
+
+**URL Example:** `/models/alexnet`
+
+**Response:**
+```json
+{
+  "model_name": "alexnet",
+  "message": "Deep Learning FTW!"
+}
+```
+
+#### GET /files/{file_path:path}
+Path parameter containing a path.
+
+**Parameters:**
+- `file_path` (path): File path (can contain slashes)
+
+**URL Example:** `/files//home/johndoe/myfile.txt` (note double slash)
+
+**Response:**
+```json
+{
+  "file_path": "/home/johndoe/myfile.txt"
+}
+```
+
+### Key Concepts Implemented
+
+1. **Query Parameters**: Parameters in URL after ? separated by &
+2. **Default Values**: Optional parameters with default values
+3. **Type Conversion**: Automatic conversion from string to declared types
+4. **Boolean Conversion**: Smart conversion of various string formats to bool
+5. **Required Parameters**: Parameters without defaults are mandatory
+6. **Optional Parameters**: Parameters with default=None are optional
+7. **Multiple Parameters**: Combining path and query parameters
+8. **Type Validation**: Automatic validation with clear error messages
+9. **Enum Values**: Restricting parameters to predefined values
+10. **Path Convertor**: Handling paths with slashes using :path
+11. **Order Matters**: More specific paths must be declared before parameterized ones
+12. **Automatic Documentation**: All parameters documented in Swagger UI
+
+### Boolean Conversion Examples
+
+FastAPI automatically converts these string values to `True`:
+- `1`, `True`, `true`, `on`, `yes` (case-insensitive)
+
+All other values convert to `False`
+
+### Type Validation
+
+When a type is declared, FastAPI:
+- Converts the value to the specified type
+- Validates the conversion
+- Returns clear error messages if validation fails
+
+**Error Example for Invalid Type:**
+```json
+{
+  "detail": [
+    {
+      "type": "int_parsing",
+      "loc": ["path", "item_id"],
+      "msg": "Input should be a valid integer",
+      "input": "foo"
+    }
+  ]
+}
+```
+
+### Path Ordering
+
+More specific paths must be declared before parameterized paths:
+```python
+@app.get("/users/me")  # Must come first
+async def read_user_me():
+    return {"user_id": "the current user"}
+
+@app.get("/users/{user_id}")  # Must come after
+async def read_user(user_id: str):
+    return {"user_id": user_id}
+```
+
+### Benefits of This Approach
+
+- **Type Safety**: Automatic type conversion and validation
+- **Clear Errors**: Detailed error messages for invalid inputs
+- **Documentation**: Automatic API documentation with parameter details
+- **Flexibility**: Support for optional, required, and default values
+- **Editor Support**: Autocomplete and type checking in IDEs
+- **Standards Compliance**: Based on OpenAPI specification
+- **Developer Experience**: Intuitive Python-style parameter declarations
