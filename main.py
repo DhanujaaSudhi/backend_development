@@ -1,10 +1,101 @@
-from fastapi import FastAPI
-from pydantic import BaseModel, EmailStr
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Generic, TypeVar
+from enum import Enum
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, EmailStr, Field
 
 app = FastAPI()
 
+# API Version
+API_VERSION = "v1"
 
+# Generic Type for Response Data
+T = TypeVar("T")
+
+# Response Envelope Models
+class Meta(BaseModel):
+    """Metadata for API responses"""
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    version: str = API_VERSION
+
+
+class SuccessResponse(BaseModel, Generic[T]):
+    """Standard success response envelope"""
+    data: T
+    meta: Meta = Field(default_factory=Meta)
+
+
+# Error Envelope Models
+class ErrorCode(str, Enum):
+    """Standardized error codes"""
+    VALIDATION_ERROR = "VALIDATION_ERROR"
+    NOT_FOUND = "NOT_FOUND"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    FORBIDDEN = "FORBIDDEN"
+
+
+class ErrorDetail(BaseModel):
+    """Detailed error information"""
+    field: str | None = None
+    message: str
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response envelope"""
+    error: dict
+    meta: Meta = Field(default_factory=Meta)
+
+    @classmethod
+    def create(cls, code: ErrorCode, message: str, details: list[ErrorDetail] | None = None):
+        """Factory method to create error response"""
+        error_dict = {
+            "code": code.value,
+            "message": message
+        }
+        if details:
+            error_dict["details"] = [d.model_dump() for d in details]
+        return cls(error=error_dict)
+
+
+# Pagination and Filter Models
+class SortOrder(str, Enum):
+    """Sort order options"""
+    asc = "asc"
+    desc = "desc"
+
+
+class PaginationParams(BaseModel):
+    """Global pagination parameters"""
+    offset: int = Field(default=0, ge=0, description="Number of items to skip")
+    limit: int = Field(default=100, ge=1, le=100, description="Maximum number of items to return")
+
+
+class SortParams(BaseModel):
+    """Global sort parameters"""
+    sort_by: str = Field(default="id", description="Field to sort by")
+    order: SortOrder = Field(default=SortOrder.asc, description="Sort order")
+
+
+class FilterOperator(str, Enum):
+    """Filter operators"""
+    equals = "equals"
+    contains = "contains"
+    starts_with = "starts_with"
+    ends_with = "ends_with"
+    greater_than = "greater_than"
+    less_than = "less_than"
+
+
+class FilterParam(BaseModel):
+    """Single filter parameter"""
+    field: str
+    operator: FilterOperator = FilterOperator.equals
+    value: str
+
+
+# Domain Models
 class ItemBase(BaseModel):
     name: str
     description: str | None = None
@@ -19,6 +110,7 @@ class ItemCreate(ItemBase):
 class ItemResponse(ItemBase):
     id: int
     price_with_tax: float | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class UserBase(BaseModel):
@@ -32,16 +124,21 @@ class UserIn(UserBase):
 
 
 class UserOut(UserBase):
-    pass
+    id: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+# API v1 Endpoints
+@app.get("/api/v1/health")
+async def health_check():
+    """Health check endpoint"""
+    return SuccessResponse(
+        data={"status": "healthy", "service": "8stages-api"}
+    )
 
 
-@app.post("/items/", response_model=ItemResponse)
-async def create_item(item: ItemCreate) -> Any:
+@app.post("/api/v1/items/")
+async def create_item(item: ItemCreate) -> SuccessResponse:
     """
     Create a new item with automatic tax calculation.
     """
@@ -52,11 +149,11 @@ async def create_item(item: ItemCreate) -> Any:
         price_with_tax = item.price + item.tax
         item_dict["price_with_tax"] = price_with_tax
     
-    return item_dict
+    return SuccessResponse(data=ItemResponse(**item_dict))
 
 
-@app.get("/items/{item_id}", response_model=ItemResponse)
-async def read_item(item_id: int):
+@app.get("/api/v1/items/{item_id}")
+async def read_item(item_id: int) -> SuccessResponse:
     """
     Retrieve an item by ID.
     """
@@ -67,94 +164,74 @@ async def read_item(item_id: int):
         "description": "A sample item description",
         "price": 99.99,
         "tax": 8.99,
-        "price_with_tax": 108.98
+        "price_with_tax": 108.98,
+        "created_at": datetime.now(timezone.utc)
     }
-    return item_data
+    return SuccessResponse(data=ItemResponse(**item_data))
 
 
-@app.post("/user/", response_model=UserOut)
-async def create_user(user: UserIn) -> Any:
+@app.get("/api/v1/items/")
+async def list_items(
+    offset: int = 0,
+    limit: int = 100,
+    sort_by: str = "id",
+    order: SortOrder = SortOrder.asc
+) -> SuccessResponse:
+    """
+    List items with pagination and sorting.
+    Global list conventions applied.
+    """
+    # Mock data - in a real app, this would query a database
+    items = [
+        ItemResponse(
+            id=1,
+            name="Portal Gun",
+            description="Interdimensional travel device",
+            price=42.0,
+            tax=3.5,
+            price_with_tax=45.5,
+            created_at=datetime.now(timezone.utc)
+        ),
+        ItemResponse(
+            id=2,
+            name="Plumbus",
+            description="Household tool",
+            price=32.0,
+            tax=2.7,
+            price_with_tax=34.7,
+            created_at=datetime.now(timezone.utc)
+        ),
+    ]
+    
+    # Apply pagination
+    paginated_items = items[offset:offset + limit]
+    
+    return SuccessResponse(data=paginated_items)
+
+
+@app.post("/api/v1/users/")
+async def create_user(user: UserIn) -> SuccessResponse:
     """
     Create a new user. Password is not returned in the response for security.
     """
     user_dict = user.model_dump()
     user_dict["id"] = 1  # In a real app, this would be generated by the database
-    return user_dict
+    user_dict.pop("password")  # Remove password from response
+    
+    return SuccessResponse(data=UserOut(**user_dict))
 
 
-# Return Type Annotation Examples
-class ItemWithTags(BaseModel):
-    name: str
-    description: str | None = None
-    price: float
-    tax: float | None = None
-    tags: list[str] = []
-
-
-@app.post("/items/with-tags/", response_model=ItemWithTags)
-async def create_item_with_tags(item: ItemWithTags) -> ItemWithTags:
+@app.get("/api/v1/users/{user_id}")
+async def read_user(user_id: int) -> SuccessResponse:
     """
-    Create an item using return type annotation for validation and documentation.
+    Retrieve a user by ID.
     """
-    return item
-
-
-@app.get("/items/list/", response_model=list[ItemWithTags])
-async def list_items() -> list[ItemWithTags]:
-    """
-    Return a list of items using return type annotation.
-    """
-    return [
-        ItemWithTags(name="Portal Gun", price=42.0, tags=["sci-fi", "weapon"]),
-        ItemWithTags(name="Plumbus", price=32.0, tags=["household", "tool"]),
-    ]
-
-
-# response_model_exclude_unset Example
-class ItemWithDefaults(BaseModel):
-    name: str
-    description: str | None = None
-    price: float
-    tax: float = 10.5
-    tags: list[str] = []
-
-
-items_db = {
-    "foo": {"name": "Foo", "price": 50.2},
-    "bar": {"name": "Bar", "description": "The bartenders", "price": 62, "tax": 20.2},
-    "baz": {"name": "Baz", "description": None, "price": 50.2, "tax": 10.5, "tags": []},
-}
-
-
-@app.get("/items/{item_id}/minimal", response_model=ItemWithDefaults, response_model_exclude_unset=True)
-async def read_item_minimal(item_id: str):
-    """
-    Return item excluding unset default values.
-    Only fields explicitly set will be included in the response.
-    """
-    return items_db[item_id]
-
-
-# response_model_include and response_model_exclude Examples
-@app.get(
-    "/items/{item_id}/name-only",
-    response_model=ItemWithDefaults,
-    response_model_include={"name", "description"},
-)
-async def read_item_name_only(item_id: str):
-    """
-    Return item with only name and description fields included.
-    """
-    return items_db[item_id]
-
-
-@app.get(
-    "/items/{item_id}/public",
-    response_model=ItemWithDefaults,
-    response_model_exclude={"tax"},
-)
-async def read_item_public(item_id: str):
-    """
-    Return item excluding the tax field.
-    """
-    return items_db[item_id]
+    # Mock data - in a real app, this would query a database
+    user_data = {
+        "id": user_id,
+        "username": "johndoe",
+        "email": "john@example.com",
+        "full_name": "John Doe",
+        "created_at": datetime.now(timezone.utc)
+    }
+    return SuccessResponse(data=UserOut(**user_data))

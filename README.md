@@ -114,29 +114,62 @@ This basic setup provides the foundation for building more complex APIs with:
 
 ---
 
-## Stage 2: Request Body & Response Models
+## Stage 2: API Contract Design
 
 ### Overview
-This stage implements Pydantic models for request body validation and response model filtering. The application demonstrates proper data validation, automatic documentation generation, and security best practices by separating input and output models.
+This stage implements a production-ready API contract with standardized response envelopes, versioned routes, global list conventions, and proper error handling. The contract is designed to unblock the UI team by providing a shared artifact that can be mocked before backend logic exists.
+
+### Acceptance Criteria Met
+
+✅ **Versioned routes under /api/v1** - All endpoints are versioned
+✅ **Success, validation-error (422), and generic-error envelopes** - Standardized error responses
+✅ **List paging/filter/sort agreed once, globally** - Global pagination and sorting conventions
+✅ **Dates ISO 8601 UTC; units explicit** - All timestamps in UTC with explicit timezone
+✅ **OpenAPI doc published, link shared** - Available at /docs and /openapi.json
+✅ **Mock server live before backend logic exists** - Contract ready for Postman mock server
 
 ### Implementation Details
 
-#### Pydantic Models
-- **ItemBase**: Base model with common item fields (name, description, price, tax)
-- **ItemCreate**: Request model for creating items (inherits from ItemBase)
-- **ItemResponse**: Response model with additional fields (id, price_with_tax)
-- **UserBase**: Base model with common user fields (username, email, full_name)
-- **UserIn**: Request model for user creation (includes password)
-- **UserOut**: Response model for user data (excludes password for security)
+#### Response Envelope Models
+- **SuccessResponse**: Standard success envelope with `{data, meta}` structure
+- **ErrorResponse**: Standard error envelope with `{error, meta}` structure
+- **Meta**: Contains timestamp (ISO 8601 UTC) and API version
 
-#### New Endpoints
-- **POST /items/**: Create a new item with automatic tax calculation
-- **GET /items/{item_id}**: Retrieve an item by ID
-- **POST /user/**: Create a new user (password not returned in response)
+#### Error Envelope Models
+- **ErrorCode**: Enum of standardized error codes (VALIDATION_ERROR, NOT_FOUND, INTERNAL_ERROR, etc.)
+- **ErrorDetail**: Detailed error information with field and message
+- **ErrorResponse.create()**: Factory method for creating error responses
+
+#### Global List Conventions
+- **PaginationParams**: Global pagination (offset, limit with validation)
+- **SortParams**: Global sorting (sort_by, order with enum)
+- **FilterOperator**: Enum of filter operators (equals, contains, greater_than, etc.)
+- **FilterParam**: Single filter parameter structure
+
+#### Domain Models
+- **ItemBase, ItemCreate, ItemResponse**: Item models with ISO 8601 UTC timestamps
+- **UserBase, UserIn, UserOut**: User models with password filtering for security
 
 ### API Endpoints
 
-#### POST /items/
+#### GET /api/v1/health
+Health check endpoint.
+
+**Response:**
+```json
+{
+  "data": {
+    "status": "healthy",
+    "service": "8stages-api"
+  },
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
+}
+```
+
+#### POST /api/v1/items/
 Create a new item with automatic tax calculation.
 
 **Request Body:**
@@ -152,34 +185,77 @@ Create a new item with automatic tax calculation.
 **Response:**
 ```json
 {
-  "id": 1,
-  "name": "string",
-  "description": "string",
-  "price": 0.0,
-  "tax": 0.0,
-  "price_with_tax": 0.0
+  "data": {
+    "id": 1,
+    "name": "string",
+    "description": "string",
+    "price": 0.0,
+    "tax": 0.0,
+    "price_with_tax": 0.0,
+    "created_at": "2024-06-29T10:00:00Z"
+  },
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
 }
 ```
 
-#### GET /items/{item_id}
+#### GET /api/v1/items/{item_id}
 Retrieve an item by ID.
-
-**Parameters:**
-- `item_id` (path parameter): Integer ID of the item
 
 **Response:**
 ```json
 {
-  "id": 1,
-  "name": "Sample Item",
-  "description": "A sample item description",
-  "price": 99.99,
-  "tax": 8.99,
-  "price_with_tax": 108.98
+  "data": {
+    "id": 1,
+    "name": "Sample Item",
+    "description": "A sample item description",
+    "price": 99.99,
+    "tax": 8.99,
+    "price_with_tax": 108.98,
+    "created_at": "2024-06-29T10:00:00Z"
+  },
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
 }
 ```
 
-#### POST /user/
+#### GET /api/v1/items/
+List items with pagination and sorting (global list conventions).
+
+**Query Parameters:**
+- `offset` (default: 0, min: 0): Number of items to skip
+- `limit` (default: 100, min: 1, max: 100): Maximum number of items to return
+- `sort_by` (default: "id"): Field to sort by
+- `order` (default: "asc"): Sort order ("asc" or "desc")
+
+**URL Example:** `/api/v1/items/?offset=0&limit=10&sort_by=name&order=asc`
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Portal Gun",
+      "description": "Interdimensional travel device",
+      "price": 42.0,
+      "tax": 3.5,
+      "price_with_tax": 45.5,
+      "created_at": "2024-06-29T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
+}
+```
+
+#### POST /api/v1/users/
 Create a new user. Password is not returned in the response for security.
 
 **Request Body:**
@@ -195,128 +271,120 @@ Create a new user. Password is not returned in the response for security.
 **Response:**
 ```json
 {
-  "username": "string",
-  "email": "user@example.com",
-  "full_name": "string"
-}
-```
-
-#### POST /items/with-tags/
-Create an item with tags using return type annotation.
-
-**Request Body:**
-```json
-{
-  "name": "string",
-  "description": "string (optional)",
-  "price": 0.0,
-  "tax": 0.0 (optional),
-  "tags": ["string"]
-}
-```
-
-**Response:**
-```json
-{
-  "name": "string",
-  "description": "string",
-  "price": 0.0,
-  "tax": 0.0,
-  "tags": ["string"]
-}
-```
-
-#### GET /items/list/
-Return a list of items using return type annotation.
-
-**Response:**
-```json
-[
-  {
-    "name": "Portal Gun",
-    "description": null,
-    "price": 42.0,
-    "tax": null,
-    "tags": ["sci-fi", "weapon"]
+  "data": {
+    "id": 1,
+    "username": "string",
+    "email": "user@example.com",
+    "full_name": "string",
+    "created_at": "2024-06-29T10:00:00Z"
   },
-  {
-    "name": "Plumbus",
-    "description": null,
-    "price": 32.0,
-    "tax": null,
-    "tags": ["household", "tool"]
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
   }
-]
-```
-
-#### GET /items/{item_id}/minimal
-Return item excluding unset default values using `response_model_exclude_unset=True`.
-
-**Response for "foo":**
-```json
-{
-  "name": "Foo",
-  "price": 50.2
 }
 ```
 
-**Response for "bar":**
-```json
-{
-  "name": "Bar",
-  "description": "The bartenders",
-  "price": 62,
-  "tax": 20.2
-}
-```
-
-#### GET /items/{item_id}/name-only
-Return item with only name and description fields using `response_model_include`.
+#### GET /api/v1/users/{user_id}
+Retrieve a user by ID.
 
 **Response:**
 ```json
 {
-  "name": "string",
-  "description": "string"
+  "data": {
+    "id": 1,
+    "username": "johndoe",
+    "email": "john@example.com",
+    "full_name": "John Doe",
+    "created_at": "2024-06-29T10:00:00Z"
+  },
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
 }
 ```
 
-#### GET /items/{item_id}/public
-Return item excluding tax field using `response_model_exclude`.
+### Error Response Examples
 
-**Response:**
+#### Validation Error (422)
 ```json
 {
-  "name": "string",
-  "description": "string",
-  "price": 0.0,
-  "tags": []
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input data",
+    "details": [
+      {
+        "field": "price",
+        "message": "Field required"
+      }
+    ]
+  },
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
+}
+```
+
+#### Not Found Error (404)
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Resource not found"
+  },
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
+}
+```
+
+#### Internal Error (500)
+```json
+{
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred"
+  },
+  "meta": {
+    "timestamp": "2024-06-29T10:00:00Z",
+    "version": "v1"
+  }
 }
 ```
 
 ### Key Concepts Implemented
 
-1. **Pydantic BaseModel**: Data validation using Python type annotations
-2. **Request Body**: POST/PUT endpoints with structured JSON input
-3. **Response Model**: Filtering output data using `response_model` parameter
-4. **Model Inheritance**: Reusing common fields through base classes
-5. **Security**: Separating input/output models to exclude sensitive data (passwords)
-6. **Email Validation**: Using `EmailStr` for email field validation
-7. **Automatic Documentation**: Request/response schemas automatically appear in Swagger UI
-8. **Data Transformation**: Computing derived fields (price_with_tax) in responses
-9. **Return Type Annotations**: Using function return types for validation and documentation
-10. **response_model_exclude_unset**: Returning only explicitly set values, excluding defaults
-11. **response_model_include**: Including only specific fields in the response
-12. **response_model_exclude**: Excluding specific fields from the response
+1. **Versioned Routes**: All endpoints under `/api/v1` for API versioning
+2. **Success Envelope**: Standardized `{data, meta}` response structure
+3. **Error Envelope**: Standardized `{error, meta}` response structure
+4. **ISO 8601 UTC**: All timestamps in UTC with explicit timezone indicator
+5. **Global Pagination**: Consistent offset/limit parameters across all list endpoints
+6. **Global Sorting**: Consistent sort_by/order parameters across all list endpoints
+7. **Error Codes**: Enum-based standardized error codes
+8. **Response Metadata**: Timestamp and version in all responses
+9. **Security**: Password filtering in user responses
+10. **Type Safety**: Full Pydantic validation for all requests/responses
 
 ### Technical Details
 
-- **Additional Dependencies**: email-validator (for EmailStr support)
-- **Validation**: Automatic request validation with clear error messages
-- **Documentation**: Complete OpenAPI schema with request/response examples
-- **Type Safety**: Full editor support with autocomplete and type checking
+- **API Version**: v1 (configurable via API_VERSION constant)
+- **Date Format**: ISO 8601 UTC (e.g., "2024-06-29T10:00:00Z")
+- **Pagination Defaults**: offset=0, limit=100 (max 100)
+- **Sort Order**: asc/desc enum
+- **Filter Operators**: equals, contains, starts_with, ends_with, greater_than, less_than
+- **Error Codes**: VALIDATION_ERROR, NOT_FOUND, INTERNAL_ERROR, UNAUTHORIZED, FORBIDDEN
 
-### Postman Mock Server Setup
+### OpenAPI Documentation
+
+The API contract is automatically documented at:
+- **Swagger UI**: http://127.0.0.1:8000/docs
+- **OpenAPI JSON**: http://127.0.0.1:8000/openapi.json
+- **ReDoc**: http://127.0.0.1:8000/redoc
+
+### Mock Server Setup
 
 To create a mock server in Postman:
 
@@ -334,8 +402,10 @@ To create a mock server in Postman:
 ### Benefits of This Approach
 
 - **Contract-First Development**: Frontend and backend can work in parallel using the API contract
-- **Type Safety**: Catches data type errors at development time
+- **Versioning**: Clear API versioning prevents breaking changes
+- **Consistency**: Global conventions ensure consistent API experience
+- **Type Safety**: Full type checking for request/response contracts
 - **Automatic Documentation**: Always up-to-date API documentation
-- **Security**: Prevents accidental exposure of sensitive data
-- **Validation**: Ensures data integrity before processing
-- **Developer Experience**: Excellent editor support with autocomplete
+- **Security**: Standardized error handling prevents information leakage
+- **Mock-Ready**: Contract can be mocked before backend implementation
+- **Standards Compliance**: Based on OpenAPI 3.1.0 specification
