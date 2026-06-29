@@ -339,3 +339,202 @@ To create a mock server in Postman:
 - **Security**: Prevents accidental exposure of sensitive data
 - **Validation**: Ensures data integrity before processing
 - **Developer Experience**: Excellent editor support with autocomplete
+
+---
+
+## Stage 3: SQL Database Integration with SQLModel and Alembic
+
+### Overview
+This stage implements SQL database integration using SQLModel (built on SQLAlchemy and Pydantic) and Alembic for database migrations. The application now persists data in a SQLite database with proper CRUD operations, model separation for security, and database version control.
+
+### Implementation Details
+
+#### SQLModel Models
+- **HeroBase**: Base model with shared fields (name, age)
+- **Hero**: Table model with database-specific fields (id, secret_name)
+- **HeroPublic**: Public response model (excludes secret_name for security)
+- **HeroCreate**: Request model for creating heroes (includes secret_name)
+- **HeroUpdate**: Request model for updating heroes (all fields optional)
+
+#### Database Setup
+- **SQLite Database**: Single-file database for simplicity (database.db)
+- **Engine**: SQLAlchemy engine for database connections
+- **Session Dependency**: FastAPI dependency providing database session per request
+- **Startup Event**: Automatic table creation on application startup
+
+#### Alembic Migrations
+- **Migration Environment**: Initialized with `alembic init alembic`
+- **Configuration**: Database URL configured in alembic.ini
+- **Autogenerate**: Automatic migration generation from SQLModel models
+- **Version Control**: Database schema changes tracked with migration files
+
+### API Endpoints
+
+#### POST /heroes/
+Create a new hero.
+
+**Request Body:**
+```json
+{
+  "name": "string",
+  "age": 0,
+  "secret_name": "string"
+}
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "string",
+  "age": 0
+}
+```
+
+#### GET /heroes/
+Retrieve a list of heroes with pagination.
+
+**Query Parameters:**
+- `offset` (default: 0): Number of heroes to skip
+- `limit` (default: 100, max: 100): Maximum number of heroes to return
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Deadpond",
+    "age": 30
+  }
+]
+```
+
+#### GET /heroes/{hero_id}
+Retrieve a specific hero by ID.
+
+**Parameters:**
+- `hero_id` (path parameter): Integer ID of the hero
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "Deadpond",
+  "age": 30
+}
+```
+
+#### PATCH /heroes/{hero_id}
+Update a hero. Only provided fields are updated.
+
+**Request Body:**
+```json
+{
+  "name": "string (optional)",
+  "age": 0 (optional),
+  "secret_name": "string (optional)"
+}
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "string",
+  "age": 0
+}
+```
+
+#### DELETE /heroes/{hero_id}
+Delete a hero by ID.
+
+**Response:**
+```json
+{
+  "ok": true
+}
+```
+
+### Key Concepts Implemented
+
+1. **SQLModel**: Combines Pydantic and SQLAlchemy for type-safe database models
+2. **Table Models**: Models with `table=True` represent database tables
+3. **Data Models**: Models without `table=True` for request/response validation
+4. **Model Inheritance**: Reusing fields through base classes to avoid duplication
+5. **Database Indexes**: Using `Field(index=True)` for optimized queries
+6. **Session Management**: FastAPI dependency for database session per request
+7. **Security**: Separating public/private models to hide sensitive data (secret_name)
+8. **CRUD Operations**: Create, Read, Update, Delete operations with proper error handling
+9. **Alembic Migrations**: Database schema version control and migration management
+10. **Autogenerate**: Automatic migration generation from model changes
+
+### Technical Details
+
+- **Database**: SQLite (for development, easily switchable to PostgreSQL/MySQL)
+- **ORM**: SQLModel 0.0.39 (built on SQLAlchemy 2.0.51)
+- **Migration Tool**: Alembic 1.18.5
+- **Session Management**: One session per request using FastAPI dependencies
+- **Primary Key**: Auto-generated integer ID
+- **Indexes**: Created on name and age fields for faster queries
+
+### Setup Instructions
+
+1. **Install additional dependencies**
+   ```bash
+   pip install sqlmodel alembic
+   ```
+
+2. **Initialize Alembic** (already done)
+   ```bash
+   alembic init alembic
+   ```
+
+3. **Configure alembic.ini** (already done)
+   - Set `sqlalchemy.url = sqlite:///database.db`
+
+4. **Update env.py** (already done)
+   - Import SQLModel and models for autogenerate support
+   - Set `target_metadata = SQLModel.metadata`
+
+5. **Generate migration** (already done)
+   ```bash
+   alembic revision --autogenerate -m "Initial migration - create hero table"
+   ```
+
+6. **Run migration**
+   ```bash
+   alembic upgrade head
+   ```
+
+### Migration Commands
+
+- **Generate new migration**: `alembic revision --autogenerate -m "description"`
+- **Apply migrations**: `alembic upgrade head`
+- **Rollback migration**: `alembic downgrade -1`
+- **View migration history**: `alembic history`
+- **View current version**: `alembic current`
+
+### Database Schema
+
+The Hero table structure:
+- `id`: INTEGER PRIMARY KEY (auto-generated)
+- `name`: TEXT (indexed)
+- `age`: INTEGER (indexed, nullable)
+- `secret_name`: TEXT (not null)
+
+### Security Considerations
+
+- **Secret Data**: The `secret_name` field is never returned in API responses
+- **Model Separation**: Using separate models for input/output prevents data leakage
+- **Validation**: All data is validated through Pydantic models before database operations
+- **SQL Injection**: SQLModel/SQLAlchemy provides protection against SQL injection
+
+### Benefits of This Approach
+
+- **Type Safety**: Full type checking for database models and API contracts
+- **Automatic Documentation**: API docs automatically reflect database schema
+- **Migration Management**: Version-controlled database schema changes
+- **Security**: Built-in protection against data exposure through model separation
+- **Performance**: Database indexes on frequently queried fields
+- **Flexibility**: Easy to switch between SQLite, PostgreSQL, MySQL, etc.
+- **Developer Experience**: Excellent editor support with autocomplete
