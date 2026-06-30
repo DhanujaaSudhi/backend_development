@@ -1,7 +1,10 @@
 from typing import Annotated
 from enum import Enum
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 sqlite_file_name = "database.db"
@@ -23,6 +26,62 @@ def get_session():
 SessionDep = Annotated[Session, Depends(get_session)]
 
 app = FastAPI()
+
+# CORS Middleware Configuration
+origins = [
+    "http://localhost",
+    "http://localhost:8080",
+    "http://localhost:3000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Custom Exception Handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Custom handler for validation errors"""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Invalid input data",
+                "details": exc.errors()
+            },
+            "meta": {
+                "timestamp": "2024-06-30T00:00:00Z",
+                "version": "v1"
+            }
+        }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Custom handler for HTTP exceptions"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": "HTTP_ERROR",
+                "message": exc.detail
+            },
+            "meta": {
+                "timestamp": "2024-06-30T00:00:00Z",
+                "version": "v1"
+            }
+        }
+    )
 
 
 @app.on_event("startup")
