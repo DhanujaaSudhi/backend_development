@@ -94,7 +94,7 @@ Pass `employee_id="INVALID"` to auth or employee detail endpoints to trigger a 4
 ### 5. Contract Changelog
 
 **Changelog File Structure (`CHANGELOG.md`):**
-```markdown
+
 # API Contract Changelog
 
 ## [1.0.0] - 2026-07-01
@@ -111,7 +111,6 @@ Pass `employee_id="INVALID"` to auth or employee detail endpoints to trigger a 4
 
 ### Deprecated
 - None
-```
 
 ## Benefits
 - **Zero Friction Integration:** UI developers can test endpoints locally in one click without reading Python code.
